@@ -1,3 +1,9 @@
+# This script sets up a Windows 11 lab machine.
+
+param (
+    [switch]$Help
+)
+
 # Ensure script runs with administrative privileges
 if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {
     Start-Process powershell.exe "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
@@ -10,11 +16,6 @@ function Show-Usage {
     Write-Host "Parameters:"
     Write-Host "  -Help    : Display this help message."
 }
-
-# Default parameters processing
-param (
-    [switch]$Help
-)
 
 if ($Help) {
     Show-Usage
