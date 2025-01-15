@@ -253,8 +253,8 @@ function Find-File {
 }
 function Append-ServerInfoToFile {
     param (
-        [string]$FilePath = "$env:USERPROFILE\Desktop\lab_build.txt",  # Default file path
-        [int]$topoNumber
+        [int]$topoNumber,
+        [string]$FilePath = "$env:USERPROFILE\Desktop\lab_build.txt"  # Default file path
     )
     # Ensure the file path ends with .txt if it doesn't already
     if (-not $FilePath.EndsWith(".txt", [System.StringComparison]::InvariantCultureIgnoreCase)) {
