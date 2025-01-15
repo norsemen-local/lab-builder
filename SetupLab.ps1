@@ -215,6 +215,54 @@ function Add-WindowsToDomain {
     }
 }
 
+function Append-LabBuild {
+    param (
+        [int]$topoNumber
+    )
+
+    $serverInfo = @(
+        "Windows Server Information:",
+        "Name: dc-$topoNumber",
+        "IP: 192.168.3.65",
+        "Username: lab-user",
+        "Password: Paloalto1!",
+        "AD Username: Administrator@ad-$topoNumber.local",
+        "AD Password: Paloalto1!",
+        "FQDN: dc-$topoNumber.ad-$topoNumber.local",
+        "",
+        "Linux Server Information:",
+        "Name: ubuntu",
+        "IP: 192.168.3.66",
+        "Username: lab-user",
+        "Password: Paloalto1!",
+        "To Access Kubernetes for CDR Agent, log in to Linux Server and run the following command:",
+        "sudo microk8s kubectl exec -it alpine-cdr-1 -- sh",
+        "Setup Commands (already run for you):",
+        "sudo snap install microk8s --classic",
+        "wget https://raw.githubusercontent.com/hankthebldr/CDR/refs/heads/master/cdr.yml",
+        "sudo microk8s kubectl apply -f cdr.yml"
+    )
+
+    # Output server information
+    Write-Host "Server Information:"
+    $serverInfo | ForEach-Object { Write-Host $_ }
+
+    # Append server information to lab-build.txt with a new line at the start
+    $labBuildPath = "$env:USERPROFILE\Desktop\lab-build.txt"
+    if (-not (Test-Path $labBuildPath)) {
+        New-Item -Path $labBuildPath -ItemType File
+    }
+
+    try {
+        # Add a new line at the start of the file
+        "`n" | Add-Content -Path $labBuildPath -ErrorAction Stop
+        $serverInfo | Add-Content -Path $labBuildPath -ErrorAction Stop
+        Write-Host "Information appended successfully to $labBuildPath"
+    } catch {
+        Write-Error "Failed to append to file: $_"
+    }
+}
+
 # Main execution
 try {
     # Create Scripts directory
@@ -260,38 +308,9 @@ try {
     [Environment]::SetEnvironmentVariable("Path", $NewPath, "Machine")
     $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
     Write-Host "Utilities added to system PATH."
-
-    $serverInfo = @(
-        "Windows Server Information:",
-        "Name: dc-$topoNumber",
-        "IP: 192.168.3.65",
-        "Username: lab-user",
-        "Password: Paloalto1!",
-        "AD Username: Administratorad-$topoNumber.local",
-        "AD Password: Paloalto1!",
-        "FQDN: dc-$topoNumber.ad-$topoNumber.local",
-        "",
-        "Linux Server Information:",
-        "Name: ubuntu",
-        "IP: 192.168.3.66",
-        "Username: lab-user",
-        "Password: Paloalto1!",
-        "To Access Kubernetes for CDR Agent, log in to Linux Server and run the followng command:",
-        "sudo microk8s kubectl exec -it alpine-cdr-1 -- sh",
-        "Setup Commands (already run for you):",
-        "sudo snap install microk8s --classic",
-        "wget https://raw.githubusercontent.com/hankthebldr/CDR/refs/heads/master/cdr.yml",
-        "sudo microk8s kubectl apply -f cdr.yml"
-    )
-
-    # Output server information
-    Write-Host "Server Information:"
-    $serverInfo | ForEach-Object { Write-Host $_ }
-
-    # Append server information to lab-build.txt with a new line at the start
-    $labBuildPath = "$env:USERPROFILE\Desktop\lab-build.txt"
-    "`n" | Add-Content -Path $labBuildPath  # Add a new line at the start
-    $serverInfo | Add-Content -Path $labBuildPath
+    
+    # calling the append funtion to write info lab-build
+    Append-LabBuild
 
     # Add kubectl autocomplete
     Add-KubectlAutocomplete
