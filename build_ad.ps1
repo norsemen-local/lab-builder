@@ -267,7 +267,7 @@ try {
     Write-Verbose "Looking for user file at $UserFilePath"
 
     # Get TOPO number from user file
-    $userTopoNumber = Get-UserTopoNumber -FilePath $UserFilePath
+    $userTopoNumber = Get-UserTopoNumber
     if ($null -eq $userTopoNumber) {
         Write-Error "Failed to retrieve TOPO number from user file. Script cannot continue."
         return
