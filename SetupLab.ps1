@@ -251,13 +251,11 @@ function Find-File {
         return $null
     }
 }
-
 function Append-ServerInfoToFile {
     param (
-        [string]$FilePath,
+        [string]$FilePath = "$env:USERPROFILE\Desktop\lab_build.txt",  # Default file path
         [int]$topoNumber
     )
-
     # Ensure the file path ends with .txt if it doesn't already
     if (-not $FilePath.EndsWith(".txt", [System.StringComparison]::InvariantCultureIgnoreCase)) {
         $FilePath += ".txt"
@@ -288,8 +286,13 @@ function Append-ServerInfoToFile {
     )
 
     try {
-        # Append each item in the array to the file
-        $serverInfo | Add-Content -Path $FilePath
+        # Insert two new lines before appending new content
+        Add-Content -Path $FilePath -Value "`r`n`r`n" -Encoding UTF8
+
+        # Loop through each item in the array and append to the file
+        foreach ($item in $serverInfo) {
+            Add-Content -Path $FilePath -Value $item -Encoding UTF8
+        }
         Write-Host "Server information appended successfully to $FilePath"
     } catch {
         Write-Error "Failed to append server information to file: $_"
