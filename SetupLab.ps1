@@ -54,28 +54,38 @@ if ($Help) {
     Show-Usage
     exit
 }
+function Get-TopoUserNumber {
+    $computerName = $env:COMPUTERNAME
 
-# Function to get TOPO number from user file
-function Get-UserTopoNumber {
-    param (
-        [string]$FilePath = "$env:USERPROFILE\user"
-    )
-    
-    if (-Not (Test-Path -Path $FilePath)) {
-        Write-Error "The file '$FilePath' does not exist."
-        return $null
-    }
-
-    $firstLine = Get-Content -Path $FilePath -TotalCount 1
-
-    if ($firstLine -match 'TOPO=(\d{4,5})') {
-        # Convert matched string to integer
+    # Check if the computer name matches the expected format
+    if ($computerName -match '^XSIAM-ILT-(\d{4,5})$') {
         return [int]$matches[1]
     } else {
-        Write-Warning "The first line does not contain 'TOPO=' followed by a 4 or 5 digit number."
+        Write-Warning "Computer name does not match expected format 'XSIAM-ILT-#####'. Checking user file for topology number..."
+
+        $userFiles = @("$env:USERPROFILE\user.txt", "$env:USERPROFILE\user")
+        foreach ($file in $userFiles) {
+            if (Test-Path -Path $file) {
+                $content = Get-Content -Path $file -First 1
+                if ($content -match 'TOPO=(\d{4,5})') {
+                    Write-Host "Topology number found in $file"
+                    return [int]$matches[1]
+                }
+            }
+        }
+
+        Write-Warning "Could not find topology number in computer name or user files."
         return $null
     }
 }
+
+# Example usage:
+# $number = Get-TopoUserNumber
+# if ($number -ne $null) {
+#     Write-Host "The topology number is: $number"
+# } else {
+#     Write-Host "Topology number not found."
+# }
 
 # Function to create a Scripts directory on the desktop
 function New-ScriptsDirectory {
