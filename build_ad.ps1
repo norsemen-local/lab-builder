@@ -28,28 +28,33 @@ function Write-Log {
     Write-Output "[$timestamp] $Message"
 }
 
-# Function to get TOPO number from user file
 function Get-UserTopoNumber {
     param (
-        [string]$FilePath = "$env:USERPROFILE\user"
+        [string]$FilePath = "$env:USERPROFILE"
     )
     
-    if (-Not (Test-Path -Path $FilePath)) {
-        Write-Error "The file '$FilePath' does not exist."
-        return $null
+    # Check for both 'user' and 'user.txt' files
+    $userFiles = @(
+        "$FilePath\user",
+        "$FilePath\user.txt"
+    )
+
+    foreach ($file in $userFiles) {
+        if (Test-Path -Path $file) {
+            $firstLine = Get-Content -Path $file -TotalCount 1
+
+            if ($firstLine -match 'TOPO=(\d{4,5})') {
+                # Convert matched string to integer
+                return [int]$matches[1]
+            } else {
+                Write-Warning "The file '$file' does not contain 'TOPO=' followed by a 4 or 5 digit number."
+            }
+        }
     }
 
-    $firstLine = Get-Content -Path $FilePath -TotalCount 1
-
-    if ($firstLine -match 'TOPO=(\d{4,5})') {
-        # Convert matched string to integer
-        return [int]$matches[1]
-    } else {
-        Write-Warning "The first line does not contain 'TOPO=' followed by a 4 or 5 digit number."
-        return $null
-    }
+    Write-Warning "Neither 'user' nor 'user.txt' files were found or contained valid TOPO information."
+    return $null
 }
-
 # Function to test if domain is already configured
 function Test-DomainConfigured {
     param (
@@ -410,7 +415,7 @@ try {
         }
         
         Configure-DNS
-        
+
         Write-Verbose "Active Directory, DNS, and DHCP setup is complete."
     }
 
