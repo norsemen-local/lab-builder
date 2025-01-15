@@ -9,6 +9,8 @@
     - Disables News and Interests and Widgets on the taskbar if not already done.
     - Downloads and sets up Kubernetes utilities if not present.
     - Adds Python to the system PATH if not already configured.
+    - Changes DNS server to 192.168.3.65.
+    - Adds the computer to the domain ad-$topoNumber.local.
     - Outputs and appends server configuration details for both Windows and Linux servers to lab-build.txt.
 
 .PARAMETER Help
@@ -55,21 +57,24 @@ if ($Help) {
 
 # Function to get TOPO number from user file
 function Get-UserTopoNumber {
-    $filePaths = @("$env:USERPROFILE\user", "$env:USERPROFILE\Desktop\lab-build.txt")
-
-    foreach ($path in $filePaths) {
-        if (Test-Path -Path $path) {
-            $firstLine = Get-Content -Path $path -TotalCount 1
-
-            if ($firstLine -match 'TOPO=(\d{4,5})') {
-                # Convert matched string to integer
-                return [int]$matches[1]
-            }
-        }
+    param (
+        [string]$FilePath = "$env:USERPROFILE\user"
+    )
+    
+    if (-Not (Test-Path -Path $FilePath)) {
+        Write-Error "The file '$FilePath' does not exist."
+        return $null
     }
 
-    Write-Error "No valid TOPO number found in user files. Script cannot continue."
-    return $null
+    $firstLine = Get-Content -Path $FilePath -TotalCount 1
+
+    if ($firstLine -match 'TOPO=(\d{4,5})') {
+        # Convert matched string to integer
+        return [int]$matches[1]
+    } else {
+        Write-Warning "The first line does not contain 'TOPO=' followed by a 4 or 5 digit number."
+        return $null
+    }
 }
 
 # Function to create a Scripts directory on the desktop
@@ -77,9 +82,9 @@ function New-ScriptsDirectory {
     $scriptsPath = "$env:USERPROFILE\Desktop\Scripts"
     if (-not (Test-Path $scriptsPath)) {
         New-Item -Path $scriptsPath -ItemType Directory | Out-Null
-        Write-Verbose "Created Scripts directory at $scriptsPath"
+        Write-Host "Created Scripts directory at $scriptsPath"
     } else {
-        Write-Verbose "Scripts directory already exists at $scriptsPath"
+        Write-Host "Scripts directory already exists at $scriptsPath"
     }
 }
 
@@ -92,7 +97,7 @@ function Download-Script {
     try {
         $webClient = New-Object System.Net.WebClient
         $webClient.DownloadFile($URL, $Destination)
-        Write-Verbose "Successfully downloaded script to $Destination"
+        Write-Host "Successfully downloaded script to $Destination"
     }
     catch {
         Write-Error "Failed to download script: $_"
@@ -111,38 +116,9 @@ function Disable-NewsAndInterests {
     # Set the registry value to disable News and Interests
     Set-ItemProperty -Path $RegPath -Name ShellFeedsTaskbarViewMode -Value 2 -Type DWord
 
-    Write-Verbose "News and Interests on the taskbar have been disabled."
-}
-
-# Function to check if News and Interests are disabled
-function Test-NewsAndInterestsDisabled {
-    $RegPath = "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Feeds"
-    return (Get-ItemProperty -Path $RegPath -Name ShellFeedsTaskbarViewMode -ErrorAction SilentlyContinue).ShellFeedsTaskbarViewMode -eq 2
-}
-
-# Function to disable Widgets on the taskbar
-function Disable-Widgets {
-    # Disable the Widgets icon on the taskbar
-    $WidgetsPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
-    if (-not (Test-Path $WidgetsPath)) {
-        New-Item -Path $WidgetsPath -Force | Out-Null
-    }
-    Set-ItemProperty -Path $WidgetsPath -Name TaskbarDa -Value 0 -Type DWord
-
-    # Disable the Widgets service if it's running
-    $WidgetsService = Get-Service -Name "Widgets" -ErrorAction SilentlyContinue
-    if ($WidgetsService -and $WidgetsService.Status -eq "Running") {
-        Stop-Service -Name "Widgets" -Force -ErrorAction SilentlyContinue
-        Set-Service -Name "Widgets" -StartupType Disabled -ErrorAction SilentlyContinue
-    }
-
-    Write-Verbose "Widgets on the taskbar have been disabled."
-}
-
-# Function to check if Widgets are disabled
-function Test-WidgetsDisabled {
-    $WidgetsPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
-    return (Get-ItemProperty -Path $WidgetsPath -Name TaskbarDa -ErrorAction SilentlyContinue).TaskbarDa -eq 0
+    # Restart explorer to apply changes
+    Stop-Process -Name explorer -Force
+    Write-Host "News and Interests on the taskbar has been disabled."
 }
 
 # Function to find Python executable in user's PATH
@@ -160,11 +136,6 @@ function Find-PythonPath {
     return $null
 }
 
-# Function to check if Python is already in PATH
-function Test-PythonInPath {
-    return [bool](Get-Command python -ErrorAction SilentlyContinue)
-}
-
 # Function to download and check hash for a file
 function DownloadAndCheckFile {
     param (
@@ -179,11 +150,11 @@ function DownloadAndCheckFile {
 
     # Download file
     Invoke-WebRequest -Uri $DownloadURL -OutFile $DestinationPath
-    Write-Verbose "Downloaded $FileName to $DestinationPath"
+    Write-Host "Downloaded $FileName to $DestinationPath"
 
     # Download hash file
     Invoke-WebRequest -Uri $HashURL -OutFile $HashFile
-    Write-Verbose "Downloaded SHA256 hash file for $FileName to $HashFile"
+    Write-Host "Downloaded SHA256 hash file for $FileName to $HashFile"
 
     # Check hash
     $LocalHash = (Get-FileHash $DestinationPath -Algorithm SHA256).Hash.ToLower()
@@ -194,15 +165,8 @@ function DownloadAndCheckFile {
         Remove-Item $DestinationPath, $HashFile
         return $false
     }
-    Write-Verbose "Hash check successful for $FileName."
+    Write-Host "Hash check successful for $FileName."
     return $true
-}
-
-# Function to check if Kubernetes utilities are already in downloads
-function Test-KubeUtilsDownloaded {
-    $KubeUtils = @("kubeadm.exe", "kubectl-convert.exe", "kube-log-runner.exe", "kubectl.exe")
-    $downloadPath = "$env:USERPROFILE\Downloads"
-    return $KubeUtils | ForEach-Object { Test-Path -Path "$downloadPath\$_" } | Where-Object { $_ -eq $false } | Measure-Object | Select-Object -ExpandProperty Count -eq 0
 }
 
 # Function to add kubectl autocomplete
@@ -210,106 +174,100 @@ function Add-KubectlAutocomplete {
     $CompletionScript = kubectl completion powershell
     $CompletionScript | Out-String | Invoke-Expression
     
-    # Ensure the profile directory exists
-    $profileDir = Split-Path $PROFILE -Parent
-    if (-not (Test-Path $profileDir)) {
-        New-Item -ItemType Directory -Path $profileDir | Out-Null
-    }
-
-    # Create profile if it does not exist, then add content
-    if (-not (Test-Path $PROFILE)) {
-        New-Item -ItemType File -Path $PROFILE -Force | Out-Null
-    }
-
+    # Save to PowerShell profile
     Add-Content $PROFILE "`n$CompletionScript"
-    Write-Verbose "kubectl autocompletion added to PowerShell profile."
+    Write-Host "kubectl autocompletion added to PowerShell profile."
+}
+
+# New function to change DNS settings on local Windows system
+function Change-DNS {
+    param (
+        [string]$DNSServer = "192.168.3.65"
+    )
+    $NetworkAdapter = Get-NetAdapter | Where-Object { $_.Status -eq "Up" } | Select-Object -First 1
+    if ($NetworkAdapter) {
+        Set-DnsClientServerAddress -InterfaceIndex $NetworkAdapter.InterfaceIndex -ServerAddresses $DNSServer
+        Write-Host "DNS server set to $DNSServer for adapter: $($NetworkAdapter.Name)"
+    } else {
+        Write-Error "No active network adapter found."
+    }
+}
+
+function Add-WindowsToDomain {
+    # Retrieve topo number
+    $topoNumber = Get-UserTopoNumber
+    if ($null -eq $topoNumber) {
+        Write-Error "Could not retrieve topo number. Domain join aborted."
+        return
+    }
+
+    # Formulate domain name and username with the topo number
+    $DomainName = "ad-$topoNumber.local"
+    $Username = "Administrator@ad-$topoNumber.local"
+    $Password = "Paloalto1!"
+
+    try {
+        Add-Computer -DomainName $DomainName -Credential (New-Object System.Management.Automation.PSCredential($Username, (ConvertTo-SecureString $Password -AsPlainText -Force))) -Restart -Force
+        Write-Host "Successfully joined $DomainName. Computer will restart."
+    }
+    catch {
+        Write-Error "Failed to join domain: $_"
+    }
 }
 
 # Main execution
 try {
-    # Get TOPO number from user file
-    $topoNumber = Get-UserTopoNumber
-    if ($null -eq $topoNumber) {
-        Write-Error "Failed to retrieve TOPO number from user file. Script cannot continue."
-        return
-    }
-
     # Create Scripts directory
     New-ScriptsDirectory
     
     # Download EDU-XSIAM-Engineer-Example.py to Scripts directory
     $scriptURL = "https://raw.githubusercontent.com/norsemen-local/lab-builder/refs/heads/main/EDU-XSIAM-Engineer-Example.py"
     $scriptDestination = "$env:USERPROFILE\Desktop\Scripts\EDU-XSIAM-Engineer-Example.py"
-    if (-not (Test-Path $scriptDestination)) {
-        Download-Script -URL $scriptURL -Destination $scriptDestination
-    } else {
-        Write-Verbose "EDU-XSIAM-Engineer-Example.py already exists, skipping download."
-    }
+    Download-Script -URL $scriptURL -Destination $scriptDestination
 
-    # Disable News and Interests if not already disabled
-    if (-not (Test-NewsAndInterestsDisabled)) {
-        Disable-NewsAndInterests
-    } else {
-        Write-Verbose "News and Interests already disabled."
-    }
+    # Disable News and Interests
+    Disable-NewsAndInterests
 
-    # Disable Widgets on taskbar if not already disabled
-    if (-not (Test-WidgetsDisabled)) {
-        Disable-Widgets
-    } else {
-        Write-Verbose "Widgets already disabled on the taskbar."
-    }
-
-    # Add Python to PATH if not already in PATH
-    if (-not (Test-PythonInPath)) {
-        $PythonDir = Find-PythonPath
-        if ($PythonDir) {
-            $OldPath = [Environment]::GetEnvironmentVariable("Path", "Machine")
-            if (-not ($OldPath -split ';' | Where-Object { $_ -eq $PythonDir })) {
-                $NewPath = "$OldPath;$PythonDir"
-                [Environment]::SetEnvironmentVariable("Path", $NewPath, "Machine")
-                $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
-                Write-Verbose "Added $PythonDir to system PATH."
-            }
-        }
-    } else {
-        Write-Verbose "Python is already in the system PATH."
-    }
-
-    # Download and setup Kubernetes utilities if not in Downloads
-    if (-not (Test-KubeUtilsDownloaded)) {
-        $KubeUtils = @("kubeadm.exe", "kubectl-convert.exe", "kube-log-runner.exe", "kubectl.exe")
-        foreach ($util in $KubeUtils) {
-            if (DownloadAndCheckFile -FileName $util -FileType "exe") {
-                # Move the utility to C:\Windows\System32
-                $SysPath = "C:\Windows\System32"
-                $UtilPath = "$env:USERPROFILE\Downloads\$util"
-                Move-Item -Path $UtilPath -Destination $SysPath -Force
-                Write-Verbose "$util moved to $SysPath"
-            }
-        }
-
-        # Add to system PATH (in case it's not already there or for new files)
+    # Add Python to PATH if found
+    $PythonDir = Find-PythonPath
+    if ($PythonDir) {
         $OldPath = [Environment]::GetEnvironmentVariable("Path", "Machine")
-        $NewPath = "$OldPath;$SysPath"
-        [Environment]::SetEnvironmentVariable("Path", $NewPath, "Machine")
-        $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
-        Write-Verbose "Utilities added to system PATH."
-    } else {
-        Write-Verbose "Kubernetes utilities already downloaded, skipping setup."
+        if (-not ($OldPath -split ';' | Where-Object { $_ -eq $PythonDir })) {
+            $NewPath = "$OldPath;$PythonDir"
+            [Environment]::SetEnvironmentVariable("Path", $NewPath, "Machine")
+            $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+            Write-Host "Added $PythonDir to system PATH."
+        } else {
+            Write-Host "$PythonDir is already in the system PATH."
+        }
     }
 
-    # Add kubectl autocomplete (assuming this can be added multiple times without issues)
-    Add-KubectlAutocomplete
+    # Download and setup Kubernetes utilities
+    $KubeUtils = @("kubeadm.exe", "kubectl-convert.exe", "kube-log-runner.exe", "kubectl.exe")
+    foreach ($util in $KubeUtils) {
+        if (DownloadAndCheckFile -FileName $util -FileType "exe") {
+            # Move the utility to C:\Windows\System32
+            $SysPath = "C:\Windows\System32"
+            $UtilPath = "$env:USERPROFILE\Downloads\$util"
+            Move-Item -Path $UtilPath -Destination $SysPath -Force
+            Write-Host "$util moved to $SysPath"
+        }
+    }
 
-    # Define and append server information with TOPO number
+    # Add to system PATH (in case it's not already there or for new files)
+    $OldPath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+    $NewPath = "$OldPath;$SysPath"
+    [Environment]::SetEnvironmentVariable("Path", $NewPath, "Machine")
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+    Write-Host "Utilities added to system PATH."
+
     $serverInfo = @(
         "Windows Server Information:",
         "Name: dc-$topoNumber",
         "IP: 192.168.3.65",
         "Username: lab-user",
         "Password: Paloalto1!",
-        "AD Username: ad-$topoNumber\Administrator",
+        "AD Username: Administratorad-$topoNumber.local",
         "AD Password: Paloalto1!",
         "FQDN: dc-$topoNumber.ad-$topoNumber.local",
         "",
@@ -318,7 +276,8 @@ try {
         "IP: 192.168.3.66",
         "Username: lab-user",
         "Password: Paloalto1!",
-        "CDR POD Access: sudo microk8s kubectl exec -it alpine-cdr-1 -- sh",
+        "To Access Kubernetes for CDR Agent, log in to Linux Server and run the followng command:",
+        "sudo microk8s kubectl exec -it alpine-cdr-1 -- sh",
         "Setup Commands (already run for you):",
         "sudo snap install microk8s --classic",
         "wget https://raw.githubusercontent.com/hankthebldr/CDR/refs/heads/master/cdr.yml",
@@ -334,10 +293,16 @@ try {
     "`n" | Add-Content -Path $labBuildPath  # Add a new line at the start
     $serverInfo | Add-Content -Path $labBuildPath
 
-    # Restart explorer to apply all changes to the taskbar
-    Stop-Process -Name explorer -Force
+    # Add kubectl autocomplete
+    Add-KubectlAutocomplete
 
-    Write-Host "`nLab setup completed successfully. Server information appended to lab-build.txt."
+    # Change DNS settings
+    Change-DNS
+
+    # Add to domain
+    Add-WindowsToDomain
+
+    Write-Host "Lab setup completed successfully."
 }
 catch {
     Write-Error "An error occurred during setup: $_"
