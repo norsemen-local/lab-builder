@@ -116,19 +116,19 @@ function Download-Script {
 
 # Function to disable News and Interests on the taskbar
 function Disable-NewsAndInterests {
-    $RegPath = "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Feeds"
-
-    # Check if the key exists, if not, create it
-    if (-not (Test-Path $RegPath)) {
-        New-Item -Path $RegPath -Force | Out-Null
+    # Disable News and Interests and Weather widget
+    $regCommand = "reg add `"HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced`" /v `"TaskbarDa`" /t REG_DWORD /d `"0`" /f"
+    
+    try {
+        Invoke-Expression $regCommand
+        Write-Host "News and Interests (Widgets) and Weather on the taskbar have been disabled."
     }
-
-    # Set the registry value to disable News and Interests
-    Set-ItemProperty -Path $RegPath -Name ShellFeedsTaskbarViewMode -Value 2 -Type DWord
+    catch {
+        Write-Error "Failed to disable widgets: $_"
+    }
 
     # Restart explorer to apply changes
     Stop-Process -Name explorer -Force
-    Write-Host "News and Interests on the taskbar has been disabled."
 }
 
 # Function to find Python executable in user's PATH
@@ -311,10 +311,11 @@ try {
     $scriptURL = "https://raw.githubusercontent.com/norsemen-local/lab-builder/refs/heads/main/EDU-XSIAM-Engineer-Example.py"
     $scriptDestination = "$env:USERPROFILE\Desktop\Scripts\EDU-XSIAM-Engineer-Example.py"
     Download-Script -URL $scriptURL -Destination $scriptDestination
-    $labBuild = "lab_build.txt"
+    $labBuild = "$env:USERPROFILE\Desktop\lab_build.txt"
     # Disable News and Interests
     Disable-NewsAndInterests
-    Append-ServerInfoToFile $env:USERPROFILE $labBuild
+    $topoNumber = Get-TopoUserNumber
+    Append-ServerInfoToFile $topoNumber
     # Add Python to PATH if found
     $PythonDir = Find-PythonPath
     if ($PythonDir) {
@@ -347,9 +348,6 @@ try {
     [Environment]::SetEnvironmentVariable("Path", $NewPath, "Machine")
     $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
     Write-Host "Utilities added to system PATH."
-    
-    # calling the append funtion to write info lab-build
-    Append-ServerInfoToFile -topoNumber Get-TopoUserNumber -FilePath "$env:USERPROFILE\Desktop\lab_build.txt"
 
     # Add kubectl autocomplete
     Add-KubectlAutocomplete
