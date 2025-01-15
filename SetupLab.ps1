@@ -349,7 +349,7 @@ try {
     Write-Host "Utilities added to system PATH."
     
     # calling the append funtion to write info lab-build
-    Append-LabBuild
+    Append-ServerInfoToFile $topoNumber
 
     # Add kubectl autocomplete
     Add-KubectlAutocomplete
