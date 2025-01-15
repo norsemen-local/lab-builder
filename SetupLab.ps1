@@ -215,11 +215,45 @@ function Add-WindowsToDomain {
     }
 }
 
-function Append-LabBuild {
+function Find-File {
     param (
+        [string]$FileName,
+        [string]$SearchLocation = "C:\"
+    )
+
+    # Ensure the SearchLocation ends with a backslash for consistency
+    if (-not $SearchLocation.EndsWith("\")) {
+        $SearchLocation += "\"
+    }
+
+    try {
+        $file = Get-ChildItem -Path $SearchLocation -Filter $FileName -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+
+        if ($file) {
+            Write-Host "File found at: $($file.FullName)"
+            return $file
+        } else {
+            Write-Host "File '$FileName' not found in $SearchLocation or its subdirectories."
+            return $null
+        }
+    } catch {
+        Write-Error "An error occurred while searching for the file: $_"
+        return $null
+    }
+}
+
+function Append-ServerInfoToFile {
+    param (
+        [string]$FilePath,
         [int]$topoNumber
     )
 
+    # Ensure the file path ends with .txt if it doesn't already
+    if (-not $FilePath.EndsWith(".txt", [System.StringComparison]::InvariantCultureIgnoreCase)) {
+        $FilePath += ".txt"
+    }
+
+    # Array of server information with $topoNumber interpolated where needed
     $serverInfo = @(
         "Windows Server Information:",
         "Name: dc-$topoNumber",
@@ -243,25 +277,17 @@ function Append-LabBuild {
         "sudo microk8s kubectl apply -f cdr.yml"
     )
 
-    # Output server information
-    Write-Host "Server Information:"
-    $serverInfo | ForEach-Object { Write-Host $_ }
-
-    # Append server information to lab-build.txt with a new line at the start
-    $labBuildPath = "$env:USERPROFILE\Desktop\lab-build.txt"
-    if (-not (Test-Path $labBuildPath)) {
-        New-Item -Path $labBuildPath -ItemType File
-    }
-
     try {
-        # Add a new line at the start of the file
-        "`n" | Add-Content -Path $labBuildPath -ErrorAction Stop
-        $serverInfo | Add-Content -Path $labBuildPath -ErrorAction Stop
-        Write-Host "Information appended successfully to $labBuildPath"
+        # Append each item in the array to the file
+        $serverInfo | Add-Content -Path $FilePath
+        Write-Host "Server information appended successfully to $FilePath"
     } catch {
-        Write-Error "Failed to append to file: $_"
+        Write-Error "Failed to append server information to file: $_"
     }
 }
+
+# Example usage:
+# Append-ServerInfoToFile -FilePath "C:\path\to\your\file" -topoNumber 1234
 
 # Main execution
 try {
@@ -272,10 +298,10 @@ try {
     $scriptURL = "https://raw.githubusercontent.com/norsemen-local/lab-builder/refs/heads/main/EDU-XSIAM-Engineer-Example.py"
     $scriptDestination = "$env:USERPROFILE\Desktop\Scripts\EDU-XSIAM-Engineer-Example.py"
     Download-Script -URL $scriptURL -Destination $scriptDestination
-
+    $labBuild = "lab_build.txt"
     # Disable News and Interests
     Disable-NewsAndInterests
-
+    Append-ServerInfoToFile $env:USERPROFILE $labBuild
     # Add Python to PATH if found
     $PythonDir = Find-PythonPath
     if ($PythonDir) {
