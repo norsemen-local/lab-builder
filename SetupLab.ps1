@@ -311,7 +311,7 @@ try {
     $scriptURL = "https://raw.githubusercontent.com/norsemen-local/lab-builder/refs/heads/main/EDU-XSIAM-Engineer-Example.py"
     $scriptDestination = "$env:USERPROFILE\Desktop\Scripts\EDU-XSIAM-Engineer-Example.py"
     Download-Script -URL $scriptURL -Destination $scriptDestination
-    $labBuild = "$env:USERPROFILE\Desktop\lab_build.txt"
+    #labBuild = "$env:USERPROFILE\Desktop\lab_build.txt"
     # Disable News and Interests
     Disable-NewsAndInterests
     $topoNumber = Get-TopoUserNumber
